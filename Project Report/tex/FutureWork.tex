@@ -1,0 +1,27 @@
+\section{Future Work}
+\label{sec:future_work}
+
+The Gen-MOR framework opens several directions for future research. The most important direction is to move from post-hoc dominance verification toward models that directly optimize dominance validity during training. The current experiment shows that AE, VAE, and CVAE models can learn useful numerical representations of MORNP-style objective vectors, but the DVR results also show that dominance-preserving generation remains unstable. Therefore, future work should focus on making dominance validity part of the learning and sampling process rather than only a post-generation evaluation step.
+
+A natural next step is to add a dominance-aware loss term to the training objective. Instead of evaluating dominance validity only after generation, the model could be penalized during training when generated samples violate the intended dominance condition. Such a term could be written generally as
+\begin{equation}
+    \mathcal{L}_{Gen\text{-}MOR}
+    =
+    \mathcal{L}_{model}
+    +
+    \lambda_{dom}\mathcal{L}_{dom},
+    \label{eq:future_dominance_loss}
+\end{equation}
+where $\mathcal{L}_{model}$ is the original AE, VAE, or CVAE loss, $\mathcal{L}_{dom}$ is a dominance-violation penalty, and $\lambda_{dom}$ controls its strength. This direction is especially important for VAE and CVAE generation, because these models produce new samples whose validity must be checked against the Pareto dominance relation.
+
+The final experiment uses a near-balanced 50K dataset with $25{,}209$ $P^{+}$ plans and $24{,}791$ $P^{-}$ plans. Future work can improve the dataset generation process further by controlling not only class counts, but also the diversity and difficulty of the samples in each class. For example, dominated plans can be generated with different degrees of domination, and nondominated plans can be generated from different regions of the Pareto front. This would allow the experiment to test whether generative models can learn easy, moderate, and difficult dominance cases separately.
+
+The CVAE provides class-controlled generation, but the current experiment shows that class conditioning alone does not guarantee better dominance validity. Future work can improve the conditioning mechanism using learned class embeddings, stronger label-conditioning layers, contrastive latent separation, or separate latent priors for $P^{+}$ and $P^{-}$. These methods may help the model generate more reliable class-specific samples and reduce the gap between intended class labels and actual dominance validity.
+
+Energy-based models provide a promising direction because they can assign low energy to valid samples and high energy to invalid samples. In the Gen-MOR setting, an EBM could be trained to assign lower energy to dominance-valid plans and higher energy to dominance-invalid plans. This would allow dominance validity to become part of the sampling process rather than only a post-generation check.
+
+Future work can also extend Gen-MOR to diffusion models or normalizing flows. Diffusion models may provide more stable sample generation, while flow-based models provide exact likelihoods and invertible transformations. A Pareto-guided or dominance-guided diffusion model could gradually denoise samples toward regions that satisfy the desired $P^{+}$ or $P^{-}$ conditions. Similarly, a flow-based Gen-MOR model could learn a structured mapping between latent variables and dominance-valid objective vectors.
+
+Although the current experiment uses $50{,}000$ plans, future experiments can vary the dataset size, number of objectives, number of selected objectives, number of generated samples, reference pool size, and number of random seeds. This would help determine how Gen-MOR scales with objective dimensionality and plan-set complexity. Larger experiments could also test whether DVR becomes more stable when the models are trained on more diverse examples.
+
+Another direction is to integrate generated plans with MORNP solver workflows. Generated samples could be used to augment plan sets, create stress-test instances, or evaluate how solvers behave under larger and more diverse dominance structures. This would connect Gen-MOR more directly to the original MORNP motivation and could show whether generative modeling improves downstream multi-objective reasoning tasks.

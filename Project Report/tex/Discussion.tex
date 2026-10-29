@@ -1,0 +1,54 @@
+\section{Discussion}
+\label{sec:discussion}
+
+This section interprets the experimental findings and explains what they imply for generative modeling in MORNP-style multi-objective planning. The discussion focuses on the relationship between reconstruction, classification, conditional generation, and dominance validity.
+
+\subsection{Main Findings}
+\label{subsec:discussion_main_findings}
+
+The main findings of the Gen-MOR 50K experiment can be summarized as follows. First, the AE and VAE models learn useful representations of MORNP-style objective vectors. The AE achieves the best reconstruction result, with a test MSE of $0.0150$, classification accuracy of $85.8\%$, and weighted F1 score of $0.8584$. The VAE achieves slightly higher reconstruction error, with MSE $0.0215$, but its classification performance remains close to the AE, with accuracy $85.4\%$ and weighted F1 score $0.8537$. This shows that probabilistic latent regularization reduces reconstruction sharpness slightly, but still preserves useful class-relevant information.
+
+Second, the CVAE provides an important capability that the AE and ordinary VAE do not directly provide: class-conditioned generation. By conditioning on $y=1$ or $y=0$, the CVAE can explicitly generate samples intended to belong to $P^{+}$ or $P^{-}$. However, the current experiment shows that this class-control mechanism does not automatically improve classification or dominance validity. The CVAE achieves test MSE $0.0213$, which is close to the VAE, but its classification accuracy drops to $67.4\%$ and its weighted F1 score drops to $0.6741$.
+
+Third, the DVR results show that dominance-valid generation is more difficult than reconstruction or classification. In the single-run experiment, the VAE achieves $87.8\%$ $P^{+}$ DVR and $45.4\%$ $P^{-}$ DVR, while the CVAE achieves $68.0\%$ $P^{+}$ DVR and $41.2\%$ $P^{-}$ DVR. Therefore, VAE performs better than CVAE on both positive and negative dominance validity in the current run. However, the multi-seed results show that DVR varies substantially across seeds, which means that dominance-valid generation is still not stable.
+
+Finally, the comparison between standard metrics and DVR shows that reconstruction performance does not automatically guarantee dominance validity. The CVAE has reconstruction error close to the VAE, but it performs worse in classification and DVR. This distinction is central to the contribution of Gen-MOR: generated samples must be evaluated not only by numerical similarity, but also by whether they satisfy the formal dominance relation.
+
+\subsection{Why AE and VAE Perform Strongly on Reconstruction}
+\label{subsec:why_ae_vae_reconstruct_well}
+
+The AE and VAE perform strongly on reconstruction because the input data consists of fixed-length numerical vectors. Compared with images, graphs, or sequences, objective vectors have a simpler structure and a fixed dimensionality. The models do not need to learn variable-length dependencies or discrete syntax. Instead, they learn correlations among objective dimensions and compress these correlations into a latent representation.
+
+The AE is particularly well suited for reconstruction because it directly optimizes a deterministic encoding and decoding path. This explains why it obtains the lowest MSE among the three models. The VAE has slightly higher reconstruction error because it also regularizes the latent distribution using the KL-divergence term. This regularization can reduce reconstruction accuracy, but it makes the latent space more suitable for sampling and generation.
+
+\subsection{Why CVAE Is Useful but Less Stable}
+\label{subsec:why_cvae_useful_less_stable}
+
+The CVAE is useful because it supports class-controlled generation. In Gen-MOR, this means that the model can be asked to generate a sample intended for $P^{+}$ or $P^{-}$. This is a major advantage over unconditional generation because the experiment requires separate evaluation of generated nondominated and dominated samples.
+
+However, the current experiment shows that conditioning alone is not enough to produce stronger dominance-aware generation. Although the dataset is near-balanced, with $25{,}209$ $P^{+}$ plans and $24{,}791$ $P^{-}$ plans, the CVAE still has weaker classification performance than AE and VAE. This suggests that the difficulty is not mainly caused by class imbalance. Instead, the challenge is likely caused by the conditional latent modeling problem and by the relational nature of dominance. The decoder must learn how the label changes the structure of the generated objective vector, but validity still depends on comparison against other plans.
+
+\subsection{Why Dominance-Aware Generation Is Difficult}
+\label{subsec:why_dominance_generation_difficult}
+
+Dominance-aware generation is difficult because dominance is relational rather than pointwise. A model can generate a vector that looks realistic in isolation, but whether that vector belongs to $P^{+}$ or $P^{-}$ depends on how it compares with other plans under the selected objective subset $S$.
+
+This makes Gen-MOR different from ordinary binary generation. In a standard classification setting, a generated sample may be judged by whether it resembles one class or another. In Gen-MOR, the generated sample must satisfy a formal comparison rule. A valid $P^{+}$ sample must not be dominated by any relevant plan, while a valid $P^{-}$ sample must be dominated by at least one relevant plan. These conditions are harder to learn because they depend on the geometry of the entire plan set.
+
+The current DVR results support this point. Both VAE and CVAE achieve lower $P^{-}$ DVR than $P^{+}$ DVR in the single-run experiment. This means that generating dominated samples is especially difficult. A generated $P^{-}$ sample must fall into a region where at least one reference plan dominates it, which is a stricter relational requirement than simply producing a plausible-looking objective vector.
+
+\subsection{Research Significance}
+\label{subsec:research_significance}
+
+The significance of Gen-MOR is that it treats generative modeling as a structure-preserving task for multi-objective reasoning. The goal is not only to generate realistic samples, but to generate samples that remain logically consistent with dominance rules. This moves the evaluation beyond ordinary reconstruction and classification.
+
+This is important for planning and decision-support systems because synthetic data may be used to stress-test algorithms, augment training sets, or explore new regions of the objective space. If generated samples violate the dominance structure, they may mislead downstream solvers or evaluators. Therefore, dominance validity must be measured explicitly. DVR provides this structural evaluation and exposes errors that MSE, accuracy, and F1 score cannot detect.
+
+\subsection{Comparison with Pareto-Guided Generative Models}
+\label{subsec:comparison_pareto_guided_models}
+
+Existing Pareto-guided generative models often focus on approximating or improving the Pareto front. For example, latent-space optimization, ParetoFlow, and Pareto-guided diffusion approaches are designed to generate samples that move toward Pareto-optimal regions or improve multi-objective trade-offs. These methods are valuable for optimization-focused generation.
+
+Gen-MOR is complementary to those approaches. Instead of focusing only on Pareto-front improvement, it studies whether generated samples preserve a dominance-based class structure. In this setting, both $P^{+}$ and $P^{-}$ are important. The model must generate nondominated plans and dominated plans, and each generated sample must be checked using the formal dominance relation. This makes DVR a necessary evaluation metric for Gen-MOR.
+
+The current results show that ordinary AE/VAE/CVAE-style generative modeling can learn useful numerical representations, but does not yet guarantee stable dominance-preserving generation. This suggests that future work should move toward explicitly dominance-constrained objectives, post-generation verification, or more advanced Pareto-guided generative models adapted to the MORNP setting.

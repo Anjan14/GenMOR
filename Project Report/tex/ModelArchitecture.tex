@@ -1,0 +1,411 @@
+\section{Model Architectures}
+\label{sec:model_architectures}
+
+This section describes the neural architectures used in Gen-MOR to learn from the MORNP-based dataset defined in Section~\ref{sec:dataset_generation}. The input to every model is a plan objective vector $\mathbf{x}_i \in \mathbb{R}^{20}$ from Eq.~\eqref{eq:final_genmor_dataset}. Each vector is associated with a label $y_i \in \{0,1\}$, where $y_i=1$ indicates a nondominated plan in $P^{+}$ and $y_i=0$ indicates a dominated plan in $P^{-}$. The goal of the models is not only to reconstruct objective vectors, but also to learn a latent representation that is useful for classification and generation.
+
+\subsection{Overview of the Gen-MOR Modeling Pipeline}
+\label{subsec:modeling_pipeline}
+
+The Gen-MOR modeling pipeline follows a common structure across the three architectures. First, the objective vector $\mathbf{x}_i$ is passed through an encoder network. The encoder maps the high-dimensional plan vector into a lower-dimensional latent representation. This latent representation is intended to capture the important structure of the plan, including information useful for distinguishing $P^{+}$ plans from $P^{-}$ plans.
+
+For a general encoder $E_{\theta}$, the latent representation can be written as
+\begin{equation}
+    \mathbf{z}_i = E_{\theta}(\mathbf{x}_i),
+    \label{eq:generic_encoder}
+\end{equation}
+where $\mathbf{z}_i \in \mathbb{R}^{d_z}$ and $d_z$ is the latent dimension. The latent vector is then passed to a decoder $D_{\phi}$ that reconstructs the original objective vector:
+\begin{equation}
+    \hat{\mathbf{x}}_i = D_{\phi}(\mathbf{z}_i).
+    \label{eq:generic_decoder}
+\end{equation}
+Here, $\hat{\mathbf{x}}_i$ is the reconstructed version of $\mathbf{x}_i$.
+
+In addition to reconstruction, the latent representation may be connected to a classifier head $C_{\psi}$ that predicts the dominance label:
+\begin{equation}
+    \hat{y}_i = C_{\psi}(\mathbf{z}_i),
+    \label{eq:generic_classifier}
+\end{equation}
+where $\hat{y}_i \in [0,1]$ represents the predicted probability that plan $p_i$ belongs to $P^{+}$. This allows the model to learn a latent space that supports both reconstruction and dominance-label separation.
+
+The three models used in this project differ mainly in how they define and use the latent representation. The plain autoencoder learns a deterministic latent vector. The variational autoencoder learns a probabilistic latent distribution from which new vectors can be sampled. The conditional variational autoencoder additionally uses the class label as a conditioning variable, which enables controlled generation of $P^{+}$ or $P^{-}$ samples.
+
+In the implemented Gen-MOR 50K experiment, all three models use input objective vectors of dimension $20$, hidden layers of sizes $256$ and $128$, and a latent dimension of $d_z=16$. Hidden layers use batch normalization and ReLU activations, and the decoder output uses a sigmoid activation because the objective vectors are MinMax-normalized to the range $[0,1]$ before training.
+
+%
+\begin{table}[H]
+\centering
+\caption{Implemented neural architecture dimensions in the Gen-MOR 50K experiment.}
+\label{tab:implemented_architecture}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Component} & \textbf{AE} & \textbf{VAE} & \textbf{CVAE} \\
+\hline
+Input dimension & $20$ & $20$ & $21$ with label conditioning \\
+Hidden dimensions & $[256,128]$ & $[256,128]$ & $[256,128]$ \\
+Latent dimension & $16$ & $16$ & $16$ \\
+Decoder input & $16$ & $16$ & $17$ with label conditioning \\
+Decoder output & $20$ & $20$ & $20$ \\
+Classifier head & $16 \rightarrow 32 \rightarrow 1$ & $16 \rightarrow 32 \rightarrow 1$ & $16 \rightarrow 32 \rightarrow 1$ \\
+Output activation & Sigmoid & Sigmoid & Sigmoid \\
+\hline
+\end{tabular}
+\end{table}
+%
+\subsection{Plain Autoencoder}
+\label{subsec:plain_autoencoder}
+
+The plain autoencoder is the simplest model used in Gen-MOR. It learns a deterministic mapping from an input objective vector to a latent vector and then reconstructs the input from that latent representation. The encoder compresses the input plan vector:
+\begin{equation}
+    \mathbf{z}_i = E_{\theta}^{AE}(\mathbf{x}_i),
+    \label{eq:ae_encoder}
+\end{equation}
+and the decoder reconstructs the objective vector:
+\begin{equation}
+    \hat{\mathbf{x}}_i = D_{\phi}^{AE}(\mathbf{z}_i).
+    \label{eq:ae_decoder}
+\end{equation}
+
+The latent vector $\mathbf{z}_i$ is expected to preserve the most important information from the original objective vector. Since the input vector contains objective values from multiple dimensions, the encoder must learn a compressed representation that still allows the decoder to recover the original plan structure. This is useful for testing whether MORNP-style objective vectors have a learnable lower-dimensional representation.
+
+To connect reconstruction with dominance-label learning, the autoencoder also includes a classification head. The classifier receives the latent vector and predicts the probability that the input plan belongs to $P^{+}$:
+\begin{equation}
+    \hat{y}_i = C_{\psi}^{AE}(\mathbf{z}_i).
+    \label{eq:ae_classifier}
+\end{equation}
+This classifier head encourages the latent representation to separate nondominated and dominated plans. A good latent representation should therefore support both accurate reconstruction and correct $P^{+}/P^{-}$ classification.
+
+The reconstruction loss is measured using mean squared error:
+\begin{equation}
+    \mathcal{L}_{rec}^{AE}
+    =
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    \left\|
+        \mathbf{x}_i - \hat{\mathbf{x}}_i
+    \right\|_2^2.
+    \label{eq:ae_reconstruction_loss}
+\end{equation}
+The classification loss is binary cross-entropy:
+\begin{equation}
+    \mathcal{L}_{cls}^{AE}
+    =
+    -\frac{1}{N}
+    \sum_{i=1}^{N}
+    \left[
+        y_i \log(\hat{y}_i)
+        +
+        (1-y_i)\log(1-\hat{y}_i)
+    \right].
+    \label{eq:ae_classification_loss}
+\end{equation}
+The total autoencoder loss combines these two terms:
+\begin{equation}
+    \mathcal{L}_{AE}
+    =
+    \mathcal{L}_{rec}^{AE}
+    +
+    \lambda_{cls}\mathcal{L}_{cls}^{AE},
+    \label{eq:ae_total_loss}
+\end{equation}
+where $\lambda_{cls}$ controls the contribution of classification loss. The reconstruction term teaches the model to preserve objective-vector information, while the classification term encourages the latent space to encode dominance-relevant structure.
+
+\subsection{Variational Autoencoder}
+\label{subsec:vae}
+
+The variational autoencoder extends the plain autoencoder by replacing the deterministic latent vector with a probabilistic latent distribution. Instead of producing only one latent vector for each input, the VAE encoder produces the parameters of a Gaussian distribution:
+\begin{equation}
+    (\boldsymbol{\mu}_i, \log \boldsymbol{\sigma}_i^{2})
+    =
+    E_{\theta}^{VAE}(\mathbf{x}_i),
+    \label{eq:vae_encoder_params}
+\end{equation}
+where $\boldsymbol{\mu}_i \in \mathbb{R}^{d_z}$ is the mean vector and $\log \boldsymbol{\sigma}_i^{2} \in \mathbb{R}^{d_z}$ is the log-variance vector. The approximate posterior distribution is then
+\begin{equation}
+    q_{\theta}(\mathbf{z}_i|\mathbf{x}_i)
+    =
+    \mathcal{N}
+    \left(
+        \boldsymbol{\mu}_i,
+        \operatorname{diag}(\boldsymbol{\sigma}_i^{2})
+    \right).
+    \label{eq:vae_latent_distribution}
+\end{equation}
+
+To sample a latent vector while still allowing gradients to pass through the network during training, the VAE uses the reparameterization trick:
+\begin{equation}
+    \mathbf{z}_i
+    =
+    \boldsymbol{\mu}_i
+    +
+    \boldsymbol{\sigma}_i \odot \boldsymbol{\epsilon}_i,
+    \qquad
+    \boldsymbol{\epsilon}_i \sim \mathcal{N}(\mathbf{0}, \mathbf{I}),
+    \label{eq:vae_reparameterization}
+\end{equation}
+where $\odot$ denotes element-wise multiplication. The decoder then reconstructs the input objective vector:
+\begin{equation}
+    \hat{\mathbf{x}}_i
+    =
+    D_{\phi}^{VAE}(\mathbf{z}_i).
+    \label{eq:vae_decoder}
+\end{equation}
+
+The VAE also uses a classification head to predict the dominance label from the sampled latent representation:
+\begin{equation}
+    \hat{y}_i
+    =
+    C_{\psi}^{VAE}(\mathbf{z}_i).
+    \label{eq:vae_classifier}
+\end{equation}
+This allows the VAE to learn a latent distribution that is useful for both reconstruction and class separation.
+
+The VAE loss includes three components. The first component is reconstruction loss:
+\begin{equation}
+    \mathcal{L}_{rec}^{VAE}
+    =
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    \left\|
+        \mathbf{x}_i - \hat{\mathbf{x}}_i
+    \right\|_2^2.
+    \label{eq:vae_reconstruction_loss}
+\end{equation}
+The second component is the KL divergence between the approximate posterior $q_{\theta}(\mathbf{z}_i|\mathbf{x}_i)$ and the prior distribution $p(\mathbf{z})=\mathcal{N}(\mathbf{0},\mathbf{I})$:
+\begin{equation}
+    \mathcal{L}_{KL}^{VAE}
+    =
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    D_{KL}
+    \left(
+        q_{\theta}(\mathbf{z}_i|\mathbf{x}_i)
+        \,\|\, 
+        p(\mathbf{z})
+    \right).
+    \label{eq:vae_kl_loss}
+\end{equation}
+For a diagonal Gaussian posterior, this term can be computed as
+\begin{equation}
+    D_{KL}
+    =
+    -\frac{1}{2}
+    \sum_{\ell=1}^{d_z}
+    \left(
+        1
+        +
+        \log \sigma_{i\ell}^{2}
+        -
+        \mu_{i\ell}^{2}
+        -
+        \sigma_{i\ell}^{2}
+    \right).
+    \label{eq:vae_kl_closed_form}
+\end{equation}
+The third component is binary classification loss:
+\begin{equation}
+    \mathcal{L}_{cls}^{VAE}
+    =
+    -\frac{1}{N}
+    \sum_{i=1}^{N}
+    \left[
+        y_i \log(\hat{y}_i)
+        +
+        (1-y_i)\log(1-\hat{y}_i)
+    \right].
+    \label{eq:vae_classification_loss}
+\end{equation}
+
+The total VAE loss is
+\begin{equation}
+    \mathcal{L}_{VAE}
+    =
+    \mathcal{L}_{rec}^{VAE}
+    +
+    \beta \mathcal{L}_{KL}^{VAE}
+    +
+    \lambda_{cls}\mathcal{L}_{cls}^{VAE},
+    \label{eq:vae_total_loss}
+\end{equation}
+where $\beta$ controls the strength of latent regularization and $\lambda_{cls}$ controls the contribution of classification. The KL term makes the latent space smoother and more suitable for sampling. Therefore, unlike a plain autoencoder, the VAE is directly useful for generating new objective vectors by sampling $\mathbf{z} \sim \mathcal{N}(\mathbf{0},\mathbf{I})$ and decoding it:
+\begin{equation}
+    \tilde{\mathbf{x}}
+    =
+    D_{\phi}^{VAE}(\mathbf{z}),
+    \qquad
+    \mathbf{z} \sim \mathcal{N}(\mathbf{0},\mathbf{I}).
+    \label{eq:vae_generation}
+\end{equation}
+
+\subsection{Conditional Variational Autoencoder}
+\label{subsec:cvae}
+
+The conditional variational autoencoder extends the VAE by incorporating the dominance label as a conditioning variable. In Gen-MOR, this is especially important because the model should be able to generate samples intended to belong to either $P^{+}$ or $P^{-}$. The label $y_i$ is therefore provided to the encoder and decoder along with the objective vector or latent variable.
+
+The conditional encoder takes both $\mathbf{x}_i$ and $y_i$ as input and produces the parameters of a class-conditioned latent distribution:
+\begin{equation}
+    (\boldsymbol{\mu}_i, \log \boldsymbol{\sigma}_i^{2})
+    =
+    E_{\theta}^{CVAE}(\mathbf{x}_i, y_i).
+    \label{eq:cvae_encoder_params}
+\end{equation}
+The conditional latent distribution is
+\begin{equation}
+    q_{\theta}(\mathbf{z}_i|\mathbf{x}_i,y_i)
+    =
+    \mathcal{N}
+    \left(
+        \boldsymbol{\mu}_i,
+        \operatorname{diag}(\boldsymbol{\sigma}_i^{2})
+    \right).
+    \label{eq:cvae_latent_distribution}
+\end{equation}
+As in the VAE, a latent vector is sampled using the reparameterization trick:
+\begin{equation}
+    \mathbf{z}_i
+    =
+    \boldsymbol{\mu}_i
+    +
+    \boldsymbol{\sigma}_i \odot \boldsymbol{\epsilon}_i,
+    \qquad
+    \boldsymbol{\epsilon}_i \sim \mathcal{N}(\mathbf{0}, \mathbf{I}).
+    \label{eq:cvae_reparameterization}
+\end{equation}
+
+The decoder also receives the class label as input:
+\begin{equation}
+    \hat{\mathbf{x}}_i
+    =
+    D_{\phi}^{CVAE}(\mathbf{z}_i, y_i).
+    \label{eq:cvae_decoder}
+\end{equation}
+This means that the same latent vector may decode differently depending on whether the requested class is $P^{+}$ or $P^{-}$. This conditioning mechanism is the main reason CVAE is included in the Gen-MOR framework. It enables class-controlled generation rather than only unconditional sampling.
+
+In the implementation, the label is concatenated directly with the objective vector at the encoder input and with the latent vector at the decoder input. Therefore, the CVAE encoder receives $[\mathbf{x}_i;y_i] \in \mathbb{R}^{21}$, while the decoder receives $[\mathbf{z}_i;y_i] \in \mathbb{R}^{17}$.
+
+The CVAE also includes a classifier head:
+\begin{equation}
+    \hat{y}_i
+    =
+    C_{\psi}^{CVAE}(\mathbf{z}_i).
+    \label{eq:cvae_classifier}
+\end{equation}
+Although the model already receives $y_i$ as a conditioning input, the classifier head is useful for checking whether the latent representation remains separable with respect to the dominance labels.
+
+The reconstruction loss for the CVAE is
+\begin{equation}
+    \mathcal{L}_{rec}^{CVAE}
+    =
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    \left\|
+        \mathbf{x}_i - \hat{\mathbf{x}}_i
+    \right\|_2^2.
+    \label{eq:cvae_reconstruction_loss}
+\end{equation}
+The conditional KL loss is
+\begin{equation}
+    \mathcal{L}_{KL}^{CVAE}
+    =
+    \frac{1}{N}
+    \sum_{i=1}^{N}
+    D_{KL}
+    \left(
+        q_{\theta}(\mathbf{z}_i|\mathbf{x}_i,y_i)
+        \,\|\,
+        p(\mathbf{z})
+    \right).
+    \label{eq:cvae_kl_loss}
+\end{equation}
+The classification loss is
+\begin{equation}
+    \mathcal{L}_{cls}^{CVAE}
+    =
+    -\frac{1}{N}
+    \sum_{i=1}^{N}
+    \left[
+        y_i \log(\hat{y}_i)
+        +
+        (1-y_i)\log(1-\hat{y}_i)
+    \right].
+    \label{eq:cvae_classification_loss}
+\end{equation}
+The total CVAE loss is
+\begin{equation}
+    \mathcal{L}_{CVAE}
+    =
+    \mathcal{L}_{rec}^{CVAE}
+    +
+    \beta \mathcal{L}_{KL}^{CVAE}
+    +
+    \lambda_{cls}\mathcal{L}_{cls}^{CVAE}.
+    \label{eq:cvae_total_loss}
+\end{equation}
+
+For class-controlled generation, the model samples a latent vector from the prior and decodes it with a chosen target label:
+\begin{equation}
+    \tilde{\mathbf{x}}^{+}
+    =
+    D_{\phi}^{CVAE}(\mathbf{z}, 1),
+    \qquad
+    \mathbf{z} \sim \mathcal{N}(\mathbf{0},\mathbf{I}),
+    \label{eq:cvae_positive_generation}
+\end{equation}
+for generated $P^{+}$ samples, and
+\begin{equation}
+    \tilde{\mathbf{x}}^{-}
+    =
+    D_{\phi}^{CVAE}(\mathbf{z}, 0),
+    \qquad
+    \mathbf{z} \sim \mathcal{N}(\mathbf{0},\mathbf{I}),
+    \label{eq:cvae_negative_generation}
+\end{equation}
+for generated $P^{-}$ samples. These generated vectors are later checked using the Dominance Validity Rate definitions in Eq.~\eqref{eq:positive_dvr} and Eq.~\eqref{eq:negative_dvr}. Thus, the CVAE directly supports the goal of generating class-specific synthetic plans, but the generated samples must still be verified using formal dominance rules.
+
+\subsection{Model Comparison Summary}
+\label{subsec:model_comparison_summary}
+
+The three architectures provide different levels of generative capability and control. The plain autoencoder is useful for learning a compact representation and reconstructing objective vectors, but its latent space is not explicitly regularized for sampling. The VAE adds probabilistic latent regularization, which makes it more suitable for generation. The CVAE adds class conditioning, which makes it possible to request generated samples from a specific dominance class. Table~\ref{tab:model_comparison_summary} summarizes the purpose of each model in the Gen-MOR framework.
+
+\begin{table}[H]
+\centering
+\caption{Comparison of Gen-MOR model architectures.}
+\label{tab:model_comparison_summary}
+\begin{tabularx}{\textwidth}{|l|X|X|X|X|}
+\hline
+\textbf{Model} & \textbf{Reconstruction} & \textbf{Generation} & \textbf{Class Control} & \textbf{Latent Regularization} \\
+\hline
+AE
+&
+Yes
+&
+Limited
+&
+Possible through classifier
+&
+No
+\\
+VAE
+&
+Yes
+&
+Yes
+&
+No direct control
+&
+Yes
+\\
+CVAE
+&
+Yes
+&
+Yes
+&
+Yes
+&
+Yes
+\\
+\hline
+\end{tabularx}
+\end{table}
+
+Overall, these models provide a progression from deterministic representation learning to probabilistic generation and finally to class-conditioned generation. This progression is important for the Gen-MOR experiment because the project evaluates not only whether neural models can reconstruct MORNP-style objective vectors, but also whether they can generate new objective vectors that preserve the intended $P^{+}$ and $P^{-}$ dominance structure.

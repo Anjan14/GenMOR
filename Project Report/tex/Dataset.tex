@@ -1,0 +1,265 @@
+\section{Dataset Generation and Verification}
+\label{sec:dataset_generation}
+
+This section describes how the Gen-MOR dataset is generated, labeled, verified, and exported for neural generative modeling. The dataset is constructed from the MORNP-style dominance setting defined in Section~\ref{sec:problem_formulation}. Each sample corresponds to one plan represented by an objective vector, and each plan is assigned a dominance-based label indicating whether it belongs to the nondominated class $P^{+}$ or the dominated class $P^{-}$. The final dataset used in this experiment contains $50{,}000$ plans, with $25{,}209$ plans in $P^{+}$ and $24{,}791$ plans in $P^{-}$.
+
+\subsection{MORNP-Based Synthetic Plan Generation}
+\label{subsec:mornp_based_generation}
+
+The dataset is generated as a synthetic MORNP-style plan collection. Let $\mathcal{P}$ denote the set of generated plans, as defined in Eq.~\eqref{eq:plan_set}, and let each plan $p_i \in \mathcal{P}$ be represented by an objective vector $\mathbf{x}_i \in \mathbb{R}^{m}$, as defined in Eq.~\eqref{eq:plan_vector}. The purpose of the synthetic generator is to create plan vectors that are not only numerical samples, but also dominance-structured samples. Therefore, the generation process must produce both nondominated examples and dominated examples under the selected objective subset $S$.
+
+In this experiment, the generator constructs objective vectors and then partitions them into two sets according to the Pareto dominance relation in Eq.~\eqref{eq:pareto_dominance}. Plans that satisfy the nondominance condition are placed in $P^{+}$, while plans that satisfy the dominated condition are placed in $P^{-}$. This construction makes the dataset suitable for the Gen-MOR learning problem defined in Eq.~\eqref{eq:genmor_dataset}, where each sample contains an objective vector and a binary dominance label.
+
+The important point is that the labels are not arbitrary class annotations. They are derived from the formal dominance behavior of the plans under the selected objective subset. Therefore, the dataset generation step also serves as the first stage of structural validation.
+
+\subsection{Objective Configuration}
+\label{subsec:objective_configuration}
+
+Each plan is evaluated using a fixed set of $m$ objectives. Following the notation from Eq.~\eqref{eq:objective_set}, the full objective set is
+\begin{equation}
+    \Omega = \{\omega_1, \omega_2, \ldots, \omega_m\}.
+    \label{eq:dataset_full_objective_set}
+\end{equation}
+In the implementation, these objectives are represented using names such as \texttt{obj\_1}, \texttt{obj\_2}, $\ldots$, \texttt{obj\_m}. The uploaded dataset schema uses twenty total objectives, represented as \texttt{obj\_1} through \texttt{obj\_20}. Thus, for this experiment,
+\begin{equation}
+    m = 20.
+    \label{eq:dataset_objective_count}
+\end{equation}
+
+Dominance verification is performed using a selected subset of objectives rather than necessarily using all objectives. Let
+\begin{equation}
+    S = \{\omega_{s_1}, \omega_{s_2}, \ldots, \omega_{s_k}\} \subseteq \Omega
+    \label{eq:dataset_selected_objective_set}
+\end{equation}
+denote the selected objective subset, where $k = |S|$. The sample dataset file records this selected subset explicitly under the field \texttt{selected\_objectives}. In the sample export, $k=12$, and the selected objectives include entries such as \texttt{obj\_4}, \texttt{obj\_1}, \texttt{obj\_9}, and other selected objective names.
+
+For every plan $p_i$, the full feature vector $\mathbf{x}_i$ contains all $m$ objective values, while dominance checks are computed using the projected vector $\mathbf{x}_i^{S}$ from Eq.~\eqref{eq:selected_projection}. This distinction is important because the generative models are trained on full objective vectors, but the structural validity of a generated sample is evaluated using the selected objective subset.
+
+\subsection{Plan Construction Strategy}
+\label{subsec:plan_construction_strategy}
+
+The construction strategy is designed to produce both $P^{+}$ and $P^{-}$ samples. A naive random generator may produce a heavily imbalanced dataset because, in high-dimensional objective spaces, many randomly generated points may become nondominated. This makes it difficult to obtain enough dominated plans for learning. Therefore, the construction process explicitly controls the number of positive and negative samples.
+
+The final experiment produces a near-balanced class distribution:
+\begin{equation}
+    |P^{+}| = 25{,}209,
+    \qquad
+    |P^{-}| = 24{,}791.
+    \label{eq:balanced_dataset_counts}
+\end{equation}
+Thus, the total number of generated plans is
+\begin{equation}
+    N = |P^{+}| + |P^{-}| = 50{,}000.
+    \label{eq:total_dataset_count}
+\end{equation}
+
+The construction process can be described as an iterative candidate-generation and verification procedure. Candidate plans are first generated as objective vectors. Each candidate is then tested against the selected objective subset $S$ using the dominance relation in Eq.~\eqref{eq:pareto_dominance}. If the candidate is not dominated by any relevant plan, it is eligible for the $P^{+}$ set. If it is dominated by at least one relevant plan, it is eligible for the $P^{-}$ set. The process continues until the required number of positive and negative plans is reached.
+
+This strategy ensures that the dataset is not simply a collection of random vectors. Instead, it is a structured collection of objective vectors whose labels are justified by dominance checks. This is essential for Gen-MOR because the later generative models are expected to learn from the dominance structure and not only from the marginal distribution of objective values.
+
+\subsection{Label Assignment}
+\label{subsec:label_assignment}
+
+After construction and verification, each plan is assigned a binary label. The label convention follows Eq.~\eqref{eq:label_definition}. A plan in the nondominated set receives label $1$, and a plan in the dominated set receives label $0$:
+\begin{equation}
+    y_i =
+    \begin{cases}
+        1, & \text{if } p_i \in P^{+},\\
+        0, & \text{if } p_i \in P^{-}.
+    \end{cases}
+    \label{eq:dataset_label_assignment}
+\end{equation}
+
+The exported dataset also stores a text version of the class name. Plans with $y_i=1$ are stored with \texttt{set\_name} equal to \texttt{P+}, while plans with $y_i=0$ are stored with \texttt{set\_name} equal to \texttt{P-}. This redundant representation is useful during debugging because the numerical label and the symbolic class name can be checked against each other.
+
+The learning dataset can therefore be written as
+\begin{equation}
+    \mathcal{D}_{\text{Gen-MOR}}
+    =
+    \{(\mathbf{x}_i, y_i)\}_{i=1}^{50000},
+    \label{eq:final_genmor_dataset}
+\end{equation}
+where $\mathbf{x}_i \in \mathbb{R}^{20}$ and $y_i \in \{0,1\}$.
+
+\subsection{Dataset Statistics}
+\label{subsec:dataset_statistics}
+
+The final dataset used in this experiment contains $50{,}000$ total plan vectors. The dataset is almost balanced between the two dominance classes. Table~\ref{tab:dataset_statistics} summarizes the class distribution.
+
+\begin{table}[H]
+\centering
+\caption{Class distribution of the final Gen-MOR dataset.}
+\label{tab:dataset_statistics}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Class} & \textbf{Symbol} & \textbf{Label} & \textbf{Number of Plans} \\
+\hline
+Nondominated plans & $P^{+}$ & $1$ & $25{,}209$ \\
+Dominated plans & $P^{-}$ & $0$ & $24{,}791$ \\
+\hline
+Total & -- & -- & $50{,}000$ \\
+\hline
+\end{tabular}
+\end{table}
+
+The class balance can also be written as
+\begin{equation}
+    \frac{|P^{+}|}{N} = 0.50418,
+    \qquad
+    \frac{|P^{-}|}{N} = 0.49582.
+    \label{eq:class_balance}
+\end{equation}
+This balanced setup is different from the preliminary dataset used earlier in the project presentation, where the class distribution was smaller and imbalanced. In that preliminary setting, the dataset contained $829$ $P^{+}$ plans and $171$ $P^{-}$ plans. The final experiment uses a larger and balanced dataset to reduce the risk that model performance is dominated by the majority class.
+
+\subsection{Class Imbalance}
+\label{subsec:class_imbalance}
+
+Class imbalance is a natural issue in MORNP-style data generation. In high-dimensional objective spaces, many randomly sampled plans may be nondominated because it becomes less likely that one plan is better than another across all selected objectives. As a result, a purely random construction process may produce many more $P^{+}$ samples than $P^{-}$ samples. This was observed in the earlier preliminary dataset, where the number of nondominated plans was much larger than the number of dominated plans.
+
+Class imbalance can affect learning in several ways. A classifier trained on an imbalanced dataset may learn to favor the majority class. A generative model may also learn a latent distribution that represents $P^{+}$ more strongly than $P^{-}$, making it harder to generate dominated plans reliably. This is especially important for the CVAE because class-conditioned generation requires the model to learn both class-conditional distributions.
+
+To reduce these issues in the final experiment, the dataset is constructed to be nearly balanced:
+\begin{equation}
+    |P^{+}| \approx |P^{-}|,
+    \qquad
+    |P^{+}| = 25{,}209,
+    \qquad
+    |P^{-}| = 24{,}791.
+    \label{eq:balanced_class_condition}
+\end{equation}
+This near balance makes accuracy easier to interpret and makes F1 score, reconstruction error, and Dominance Validity Rate more comparable across the two classes.
+
+\subsection{Dominance Verification Procedure}
+\label{subsec:dominance_verification_procedure}
+
+A sample-based verification is reported for scalability, using the Pareto dominance relation defined in Eq.~\eqref{eq:pareto_dominance}. The verification procedure uses the selected objective subset $S$ and compares each plan against the relevant plan pool.
+
+For a candidate positive plan $p_i \in P^{+}$, the verification condition is
+\begin{equation}
+    \nexists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i.
+    \label{eq:positive_verification_condition}
+\end{equation}
+This condition is the same nondominance requirement used in Eq.~\eqref{eq:p_plus_definition}. It ensures that a positive plan is not dominated by any other plan under the selected objectives.
+
+For a candidate negative plan $p_i \in P^{-}$, the verification condition is
+\begin{equation}
+    \exists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i.
+    \label{eq:negative_verification_condition}
+\end{equation}
+This condition is the same dominated-plan requirement used in Eq.~\eqref{eq:p_minus_definition}. It ensures that a negative plan has at least one dominator under the selected objectives.
+
+The verification step is necessary because the dataset is later used as ground truth for training and evaluation. If the labels were not checked against the dominance relation, the neural models could learn from inconsistent examples. In the experiment, dominance verification is performed using the selected objective subset and vectorized comparison. Because a full pairwise dominance check over all $50{,}000$ plans is computationally expensive, the notebook also reports a sample-based verification over $2{,}000$ plans. This spot-check found zero $P^{+}$ dominance violations, confirming that sampled positive plans remained nondominated in the sampled reference pool. For $P^{-}$ plans, the sample-based check is more conservative because a dominated plan may require a dominator outside the sampled reference pool; therefore, negative-plan verification is interpreted with respect to the available reference set used in the check.
+
+\subsection{Consistency Checks}
+\label{subsec:consistency_checks}
+
+Several consistency checks are applied before the dataset is accepted for training. These checks ensure that the exported records, numerical feature vectors, and dominance labels agree with each other.
+
+First, the intended consistency condition for every $P^{+}$ plan is the nondominance condition:
+\begin{equation}
+    \forall p_i \in P^{+},
+    \quad
+    \nexists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i.
+    \label{eq:consistency_positive}
+\end{equation}
+%
+A sample-based dominance check was performed over $2{,}000$ plans. Within this sampled reference pool, no sampled $P^{+}$ plan was found to be dominated by another sampled plan.
+%
+\newline
+%
+Second, the intended consistency condition for every $P^{-}$ plan is the dominated condition:
+\begin{equation}
+    \forall p_i \in P^{-},
+    \quad
+    \exists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i.
+    \label{eq:consistency_negative}
+\end{equation}
+For $P^{-}$ plans, the observed result depends on the size and coverage of the reference pool used during verification, since a negative plan may be dominated by a plan outside a sampled subset.
+%
+\newline
+%
+Third, each objective vector must have the expected dimensionality:
+\begin{equation}
+    \mathbf{x}_i \in \mathbb{R}^{20}
+    \quad
+    \forall i \in \{1,2,\ldots,N\}.
+    \label{eq:feature_dimension_check}
+\end{equation}
+Fourth, the exported label must match the symbolic class name:
+\begin{equation}
+    y_i = 1 \iff \texttt{set\_name}(p_i)=\texttt{P+},
+    \qquad
+    y_i = 0 \iff \texttt{set\_name}(p_i)=\texttt{P-}.
+    \label{eq:label_setname_consistency}
+\end{equation}
+
+Finally, the feature vector order must be consistent across all records. This is important because the neural models treat each feature position as a fixed objective dimension. If one record stores \texttt{obj\_2} in the second position but another record changes the order, then the input matrix would no longer represent a valid objective space. Therefore, every record is checked against the same \texttt{feature\_vector\_order}.
+
+\subsection{Dataset Export Format}
+\label{subsec:dataset_export_format}
+
+The dataset is exported in JSON format so that both the metadata and the plan records are preserved. The top-level JSON object contains a dataset type, creation timestamp, metadata, an instance summary, and the list of plan records. The metadata stores the seed, full objective list, selected objective list, target plan count, constructed class counts, construction success flag, objective count, and selected objective budget $k$.
+
+Each plan record contains the following fields:
+\begin{compactitem}
+    \item \texttt{plan\_name}: a unique plan identifier such as \texttt{p\_1};
+    \item \texttt{label}: the binary class label, where $1$ indicates $P^{+}$ and $0$ indicates $P^{-}$;
+    \item \texttt{set\_name}: the symbolic class name, either \texttt{P+} or \texttt{P-};
+    \item \texttt{objective\_values}: a dictionary mapping objective names to objective values;
+    \item \texttt{feature\_vector\_order}: the fixed objective order used to construct the neural input vector;
+    \item \texttt{feature\_vector}: the numerical vector $\mathbf{x}_i$ used for model training.
+\end{compactitem}
+
+A simplified version of one exported record is shown below:
+\begin{verbatim}
+{
+  "plan_name": "p_1",
+  "label": 1,
+  "set_name": "P+",
+  "objective_values": {
+    "obj_1": 48,
+    "obj_2": 86,
+    "...": "...",
+    "obj_20": 89
+  },
+  "feature_vector_order": [
+    "obj_1", "obj_2", "...", "obj_20"
+  ],
+  "feature_vector": [
+    48, 86, "...", 89
+  ]
+}
+\end{verbatim}
+
+For training in Google Colab, the JSON records are converted into an input matrix and a label vector:
+\begin{equation}
+    \mathbf{X}
+    =
+    \begin{bmatrix}
+        \mathbf{x}_1^{T} \\
+        \mathbf{x}_2^{T} \\
+        \vdots \\
+        \mathbf{x}_N^{T}
+    \end{bmatrix}
+    \in \mathbb{R}^{50000 \times 20},
+    \qquad
+    \mathbf{y}
+    =
+    \begin{bmatrix}
+        y_1 \\
+        y_2 \\
+        \vdots \\
+        y_N
+    \end{bmatrix}
+    \in \{0,1\}^{50000}.
+    \label{eq:training_matrix_and_labels}
+\end{equation}
+The matrix $\mathbf{X}$ is used as the numerical input to the AE, VAE, and CVAE models, while $\mathbf{y}$ is used for classification and conditional generation. The selected objective subset $S$ is retained separately because it is required for dominance verification and DVR computation after generation.

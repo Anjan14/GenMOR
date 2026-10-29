@@ -1,0 +1,107 @@
+\documentclass[runningheads]{llncs}
+%
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{times}
+
+
+\usepackage{tabularx}
+\usepackage{float}
+
+\usepackage{multicol}
+\usepackage{changes}
+\usepackage[bookmarks=true]{hyperref}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{textcomp}
+\usepackage{algorithmic}
+\usepackage[ruled,vlined,noend,linesnumbered]{algorithm2e}
+\usepackage[english]{babel}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumerate}
+\usepackage{framed}
+\usepackage{tabularx}
+\usepackage{url}
+\usepackage{mathrsfs}
+\usepackage[framemethod=default,innerleftmargin=5pt,innerrightmargin=5pt,skipabove=5pt,topline=false,rightline=false,bottomline=false,linewidth=2.5pt,roundcorner=5pt]{mdframed}
+\usepackage{paralist}
+\usepackage[table]{xcolor}
+\usepackage{xcolor}
+
+\usepackage{xcolor}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\newcommand\mycommfont[1]{\footnotesize\ttfamily\textcolor{blue}{#1}}
+\SetCommentSty{mycommfont}
+
+\usepackage{complexity}
+
+%
+\begin{document}
+%
+\title{Gen-MOR: Generative Modeling of Dominance-Preserving Multi-Objective Plans
+}
+%
+\author{Anjan Roy and Syed Hasnayeen}
+\institute{Missouri State University, Springfield MO}
+%
+\maketitle
+%
+\begin{abstract}
+The purpose of multi-objective planning is to compare plans across several competing objectives. Pareto dominance is used to distinguish nondominated plans from dominated ones. We have introduced Gen-MOR, a generative model for learning and generating dominance-preserving multi-objective plans that are derived from the Minimal Objectives Relevant to Nondominated Plans (MORNP) setting. Each plan in the dataset is represented as an objective vector with a structural level: $P^{+}$ for nondominated plans and $P^{-}$ for dominated plans.
+
+We have trained and evaluated three neural generative models: a plain autoencoder (AE), a variational autoencoder (VAE), and a conditional variational autoencoder (CVAE). All three models are assessed using reconstruction error, classification accuracy, F1 score, and latent-space characteristics. We have introduced a novel domain-specific metric called Dominance Validity Rate (DVR), which measures whether generated plans preserve the desired dominance structure. The results show that AE and VAE learn useful representations for reconstruction and classification, and CVAE enables class-conditioned generation. Nonetheless, dominance-valid generations remain more difficult than standard reconstruction, which tells us the need for explicit dominance-aware generative modeling. 
+
+\keywords{Generative modeling \and Multi-objective planning \and Pareto dominance \and Autoencoder \and Variational autoencoder \and Conditional VAE \and Dominance validity}
+\end{abstract}
+%
+\input{tex/Introduction}
+%
+\input{tex/RelatedWorks}
+%
+\input{tex/ProblemFormulation}
+%
+\input{tex/Dataset}
+%
+\input{tex/ModelArchitecture}
+%
+\input{tex/ExperimentalSetup}
+%
+\input{tex/EvaluationMetrics}
+%
+\input{tex/ExperimentalResults}
+%
+\input{tex/DominanceValidityAnalysis}
+%
+\input{tex/MultiSeedRobustness}
+%
+\input{tex/Discussion}
+%
+\input{tex/Limitation}
+%
+\input{tex/FutureWork}
+%
+\section{Conclusion}
+\label{sec:conclusion}
+
+This project introduced Gen-MOR, a generative modeling framework for MORNP-style multi-objective plan vectors. Each plan is represented as an objective vector and assigned a dominance-based label: $P^{+}$ for nondominated plans and $P^{-}$ for dominated plans. The central goal is to learn models that can reconstruct, classify, and generate plan vectors while preserving the dominance structure defined by Pareto dominance.
+
+The experiment evaluates three neural architectures: AE, VAE, and CVAE. The AE provides a deterministic representation-learning baseline, the VAE introduces probabilistic latent generation, and the CVAE enables class-conditioned generation for $P^{+}$ and $P^{-}$ samples. These models are evaluated using reconstruction MSE, classification accuracy, precision, recall, F1 score, and KL divergence where applicable.
+
+The main contribution of Gen-MOR is the use of Dominance Validity Rate as a structural evaluation metric. DVR directly measures whether generated $P^{+}$ samples remain nondominated and whether generated $P^{-}$ samples remain dominated under the selected objective subset. This is important because standard metrics alone cannot determine whether a generated sample is valid under the MORNP dominance structure.
+
+The Gen-MOR 50K experiment shows that AE and VAE learn useful representations of MORNP-style objective vectors. The AE achieves the strongest reconstruction and classification performance, with MSE $0.0150$, accuracy $85.8\%$, and weighted F1 score $0.8584$. The VAE achieves slightly higher reconstruction error, with MSE $0.0215$, but maintains similar classification performance with accuracy $85.4\%$ and weighted F1 score $0.8537$. The CVAE achieves reconstruction MSE $0.0213$, but its classification performance is lower, with accuracy $67.4\%$ and weighted F1 score $0.6741$.
+
+The dominance validity analysis shows that VAE performs better than CVAE in the single-run DVR evaluation. The VAE achieves $87.8\%$ $P^{+}$ DVR and $45.4\%$ $P^{-}$ DVR, while the CVAE achieves $68.0\%$ $P^{+}$ DVR and $41.2\%$ $P^{-}$ DVR. These results show that class-conditioned generation alone does not guarantee dominance-valid generation. The multi-seed analysis further shows that DVR has much higher variance than reconstruction and classification metrics, indicating that dominance-preserving generation remains unstable across random seeds.
+
+Overall, the project supports the feasibility of using generative models for multi-objective reasoning data, but it also shows that dominance-preserving generation is more difficult than ordinary reconstruction or classification. Future work should therefore incorporate dominance constraints directly into the training process and explore more advanced generative architectures such as energy-based models, diffusion models, and flow-based models.
+%
+\bibliographystyle{splncs04}
+\vspace{-10pt}
+\bibliography{references}
+\end{document}

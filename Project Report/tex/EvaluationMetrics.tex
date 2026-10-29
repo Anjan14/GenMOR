@@ -1,0 +1,112 @@
+\section{Evaluation Metrics}
+\label{sec:evaluation_metrics}
+
+This section defines the metrics used to evaluate the Gen-MOR models. Because the goal of this project is not only to reconstruct objective vectors but also to generate dominance-preserving plans, the evaluation includes both standard machine learning metrics and the dominance-specific metric introduced in Section~\ref{subsec:dvr}. The standard metrics measure reconstruction and classification behavior, while Dominance Validity Rate (DVR) measures whether generated samples remain structurally valid under the Pareto dominance relation.
+
+\subsection{Reconstruction Mean Squared Error}
+\label{subsec:metric_mse}
+
+Reconstruction quality is measured using mean squared error (MSE). For each test sample $\mathbf{x}_i$, the model produces a reconstructed vector $\hat{\mathbf{x}}_i$. The reconstruction MSE is defined as
+\begin{equation}
+    \operatorname{MSE}
+    =
+    \frac{1}{N_{test}}
+    \sum_{i=1}^{N_{test}}
+    \left\|
+        \mathbf{x}_i - \hat{\mathbf{x}}_i
+    \right\|_2^2,
+    \label{eq:metric_mse}
+\end{equation}
+where $N_{test}$ is the number of test samples. A lower MSE indicates that the model reconstructs the original objective vectors more accurately.
+
+In Gen-MOR, MSE is useful because it shows whether the AE, VAE, and CVAE can learn the numerical structure of the multi-objective plan vectors. However, MSE alone does not measure whether generated samples preserve dominance relationships.
+
+\subsection{Classification Accuracy}
+\label{subsec:metric_accuracy}
+
+Classification accuracy measures how often the model correctly predicts whether a plan belongs to $P^{+}$ or $P^{-}$. Let $y_i$ be the true label and let $\bar{y}_i$ be the predicted class label after thresholding the model output as defined in Eq.~\eqref{eq:classification_threshold}. Accuracy is defined as
+\begin{equation}
+    \operatorname{Accuracy}
+    =
+    \frac{1}{N_{test}}
+    \sum_{i=1}^{N_{test}}
+    \mathbb{I}
+    \left[
+        \bar{y}_i = y_i
+    \right],
+    \label{eq:metric_accuracy}
+\end{equation}
+where $\mathbb{I}[\cdot]$ is the indicator function.
+
+Accuracy is easy to interpret, especially because the final dataset is near-balanced between $P^{+}$ and $P^{-}$. However, accuracy is still reported together with precision, recall, and F1 score because classification behavior may differ between the nondominated and dominated classes.
+
+\subsection{Precision, Recall, and F1 Score}
+\label{subsec:metric_precision_recall_f1}
+
+Precision, recall, and F1 score provide a more detailed view of classification performance. In this experiment, the positive class corresponds to $P^{+}$, meaning that $y_i=1$ indicates a nondominated plan.
+
+Precision measures the fraction of predicted positive samples that are actually positive:
+\begin{equation}
+    \operatorname{Precision}
+    =
+    \frac{TP}{TP+FP},
+    \label{eq:metric_precision}
+\end{equation}
+where $TP$ is the number of true positives and $FP$ is the number of false positives.
+
+Recall measures the fraction of actual positive samples that are correctly predicted:
+\begin{equation}
+    \operatorname{Recall}
+    =
+    \frac{TP}{TP+FN},
+    \label{eq:metric_recall}
+\end{equation}
+where $FN$ is the number of false negatives.
+
+The F1 score is the harmonic mean of precision and recall:
+\begin{equation}
+    \operatorname{F1}
+    =
+    2
+    \cdot
+    \frac{
+        \operatorname{Precision}
+        \cdot
+        \operatorname{Recall}
+    }{
+        \operatorname{Precision}
+        +
+        \operatorname{Recall}
+    }.
+    \label{eq:metric_f1}
+\end{equation}
+
+F1 score is useful because it balances false positives and false negatives. In the Gen-MOR setting, this matters because confusing $P^{+}$ and $P^{-}$ is not merely a classification error; it also indicates that the model may not be learning the dominance boundary clearly.
+
+\subsection{KL Divergence for VAE and CVAE}
+\label{subsec:metric_kl_divergence}
+
+For the VAE and CVAE models, the KL-divergence term measures how close the learned latent posterior is to the prior distribution. As defined in Eq.~\eqref{eq:vae_kl_loss} and Eq.~\eqref{eq:cvae_kl_loss}, the KL term regularizes the latent space toward the standard normal prior $p(\mathbf{z})=\mathcal{N}(\mathbf{0},\mathbf{I})$.
+
+For a diagonal Gaussian posterior, the KL divergence is computed using the closed form from Eq.~\eqref{eq:vae_kl_closed_form}. A very small KL value may indicate that the latent space is close to the prior, but it may also suggest posterior collapse if the decoder ignores the latent variable. A very large KL value may indicate that the latent distribution is poorly regularized. Therefore, KL divergence is monitored together with reconstruction and classification losses during training.
+
+\subsection{Dominance Validity Rate}
+\label{subsec:metric_dvr}
+
+Dominance Validity Rate is the main structural metric for Gen-MOR. It directly evaluates whether generated samples preserve the intended dominance behavior. The positive DVR, defined in Eq.~\eqref{eq:positive_dvr}, measures the fraction of generated $P^{+}$ samples that remain nondominated. The negative DVR, defined in Eq.~\eqref{eq:negative_dvr}, measures the fraction of generated $P^{-}$ samples that remain dominated.
+
+The overall DVR is computed using Eq.~\eqref{eq:overall_dvr}. In the experimental results, class-specific DVR values are reported separately because positive and negative generation may have different difficulty levels. In particular, generating valid $P^{-}$ samples can be difficult because the generated sample must be dominated by at least one other plan under the selected objective subset.
+
+\subsection{Multi-Seed Variance}
+\label{subsec:metric_multiseed_variance}
+
+To evaluate robustness, each model is trained and evaluated across multiple random seeds. For each metric, the mean and standard deviation are reported using Eq.~\eqref{eq:metric_mean} and Eq.~\eqref{eq:metric_std}. The mean indicates average performance, while the standard deviation indicates stability across runs.
+
+This is especially important for generative modeling because different random seeds may produce different latent spaces and different generated samples. A model with high average DVR but high variance may not be reliable. Therefore, Gen-MOR reports both average performance and variability for reconstruction, classification, and dominance validity.
+
+\subsection{Why Standard Metrics Are Insufficient}
+\label{subsec:why_standard_metrics_insufficient}
+
+Standard metrics such as MSE, accuracy, and F1 score are necessary but not sufficient for evaluating Gen-MOR. A model may reconstruct objective vectors accurately and classify test samples correctly, but still generate new samples that violate the dominance relation from Eq.~\eqref{eq:pareto_dominance}. This happens because dominance validity is relational. It depends on how a generated plan compares with other plans, not only on the generated vector itself.
+
+For example, a generated vector may be close to the training distribution and may be classified as $P^{+}$ by the neural classifier. However, if another plan dominates it under the selected objective subset $S$, then it is not a valid generated $P^{+}$ sample. Similarly, a generated $P^{-}$ sample is invalid if no other plan dominates it. DVR is therefore required to measure the structural correctness of generated plans.

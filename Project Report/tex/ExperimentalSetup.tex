@@ -1,0 +1,237 @@
+\section{Experimental Setup}
+\label{sec:experimental_setup}
+
+This section describes the implementation environment, preprocessing pipeline, training configuration, and evaluation protocol used for the Gen-MOR 50K experiment. The experiment is implemented and executed in Google Colab using the exported MORNP-style dataset described in Section~\ref{sec:dataset_generation}.
+
+\subsection{Implementation Environment}
+\label{subsec:implementation_environment}
+
+The experiments are implemented in Google Colab Pro using Python. Google Colab Pro is used because the dataset contains $50{,}000$ plan vectors and the neural models require repeated training, generation, and dominance verification. The implementation uses PyTorch as the deep learning framework. Numerical processing, dataset handling, and evaluation are performed using standard Python scientific computing libraries, including NumPy, Pandas, Scikit-learn, Matplotlib, and Seaborn.
+
+The experiment is executed using a GPU runtime. In the completed Experiment run, the runtime used a Tesla T4 GPU with approximately $15.6$ GB of GPU memory. The main implementation environment is summarized in Table~\ref{tab:implementation_environment}.
+
+\begin{table}[H]
+\centering
+\caption{Implementation environment for the Gen-MOR 50K experiment.}
+\label{tab:implementation_environment}
+\begin{tabularx}{\textwidth}{lX}
+\hline
+\textbf{Component} & \textbf{Configuration} \\
+\hline
+Platform & Google Colab Pro \\
+Programming language & Python, Google Colab environment \\
+Deep learning framework & PyTorch 2.10.0+cu128 \\
+Runtime type & GPU \\
+GPU type & Tesla T4 \\
+GPU memory & 15.6 GB \\
+Dataset size & $50{,}000$ plans \\
+Input dimension & $20$ objectives \\
+Selected MORNP objectives & $k=12$ \\
+Classes & $P^{+}$ and $P^{-}$ \\
+\hline
+\end{tabularx}
+\end{table}
+
+The same notebook is used for dataset loading, preprocessing, model training, generation, dominance verification, and result visualization. This keeps the experiment pipeline consistent from raw exported JSON records to final evaluation tables and plots.
+
+\subsection{Data Preprocessing}
+\label{subsec:data_preprocessing}
+
+The dataset is loaded from the exported JSON format described in Section~\ref{subsec:dataset_export_format}. Each record contains a plan name, a binary label, a symbolic set name, objective values, a fixed feature-vector order, and a numerical feature vector. The feature vector is extracted as the model input $\mathbf{x}_i$, and the label field is extracted as the target value $y_i$.
+
+The full input matrix and label vector follow the notation from Eq.~\eqref{eq:training_matrix_and_labels}:
+\begin{equation}
+    \mathbf{X} \in \mathbb{R}^{50000 \times 20},
+    \qquad
+    \mathbf{y} \in \{0,1\}^{50000}.
+    \label{eq:experimental_input_matrix}
+\end{equation}
+Each row of $\mathbf{X}$ corresponds to one objective-vector plan, and each entry of $\mathbf{y}$ corresponds to the associated $P^{+}$ or $P^{-}$ label. The dataset contains $25{,}209$ $P^{+}$ plans and $24{,}791$ $P^{-}$ plans, giving a near-balanced class distribution.
+
+Before training, the objective values are normalized so that all objective dimensions are placed on a comparable scale. This is important because objectives may have different numerical ranges, and neural networks can become biased toward features with larger magnitudes. Let $\mathbf{x}_i$ be an original objective vector and let $\mathbf{x}'_i$ be its normalized version. The normalization procedure is written generally as
+\begin{equation}
+    \mathbf{x}'_i = \operatorname{Normalize}(\mathbf{x}_i).
+    \label{eq:normalization_general}
+\end{equation}
+In the final implementation, the normalization method is MinMax scaling. Each objective value is transformed as
+\begin{equation}
+    x'_{ij}
+    =
+    \frac{x_{ij} - \min(x_j)}
+    {\max(x_j)-\min(x_j)},
+    \label{eq:minmax_scaling}
+\end{equation}
+where $\min(x_j)$ and $\max(x_j)$ are computed from the training portion of objective dimension $j$. The fitted scaler is then applied to the validation and test sets.
+
+After feature extraction and normalization, the dataset is divided into training, validation, and test sets:
+\begin{equation}
+    \mathcal{D}_{\text{Gen-MOR}}
+    =
+    \mathcal{D}_{train}
+    \cup
+    \mathcal{D}_{val}
+    \cup
+    \mathcal{D}_{test}.
+    \label{eq:train_val_test_split}
+\end{equation}
+The split used in the final experiment is
+\begin{equation}
+    |\mathcal{D}_{train}| = 34{,}999,
+    \qquad
+    |\mathcal{D}_{val}| = 7{,}501,
+    \qquad
+    |\mathcal{D}_{test}| = 7{,}500.
+    \label{eq:split_counts}
+\end{equation}
+This corresponds approximately to a $70\%/15\%/15\%$ train-validation-test split. The split is stratified by label so that both $P^{+}$ and $P^{-}$ are represented consistently in each partition. This is especially important for fair evaluation of classification accuracy, F1 score, and class-specific dominance validity.
+
+A WeightedRandomSampler is also used in the training loader. Since the final dataset is already near-balanced, the sampler has only a small effect, but it is kept for methodological consistency and to ensure balanced mini-batches.
+
+\subsection{Training Configuration}
+\label{subsec:training_configuration}
+
+The AE, VAE, and CVAE models are trained using the same general training pipeline. Each model receives normalized objective vectors as input and is optimized using reconstruction loss and, where applicable, classification and KL-divergence terms. The AE uses the loss in Eq.~\eqref{eq:ae_total_loss}, the VAE uses the loss in Eq.~\eqref{eq:vae_total_loss}, and the CVAE uses the loss in Eq.~\eqref{eq:cvae_total_loss}.
+
+The main hyperparameters are recorded in Table~\ref{tab:training_configuration}.
+
+\begin{table}[H]
+\centering
+\caption{Training configuration for AE, VAE, and CVAE models.}
+\label{tab:training_configuration}
+\begin{tabularx}{\textwidth}{lXXX}
+\hline
+\textbf{Hyperparameter} & \textbf{AE} & \textbf{VAE} & \textbf{CVAE} \\
+\hline
+Maximum epochs & $200$ & $200$ & $200$ \\
+Early stopping patience & $28$ & $22$ & $22$ \\
+Batch size & $256$ & $256$ & $256$ \\
+Learning rate & $0.001$ & $0.001$ & $0.001$ \\
+Optimizer & Adam & Adam & Adam \\
+Weight decay & $10^{-5}$ & $10^{-5}$ & $10^{-5}$ \\
+Scheduler & ReduceLROnPlateau & ReduceLROnPlateau & ReduceLROnPlateau \\
+Input dimension & $20$ & $20$ & $20$ \\
+Hidden dimensions & $[256,128]$ & $[256,128]$ & $[256,128]$ \\
+Latent dimension $d_z$ & $16$ & $16$ & $16$ \\
+KL weight $\beta$ & -- & annealed up to $0.5$ & annealed up to $0.5$ \\
+Classification weight $\lambda_{cls}$ & $0.5$ & $0.5$ & $0.5$ \\
+Main random seed & $42$ & $42$ & $42$ \\
+\hline
+\end{tabularx}
+\end{table}
+
+For each epoch, the model is trained on $\mathcal{D}_{train}$ and monitored on $\mathcal{D}_{val}$. The validation set is used to observe whether reconstruction loss, classification loss, and KL divergence behave consistently during training. The test set is held out until final evaluation so that the reported results reflect generalization to unseen objective-vector plans.
+
+For the VAE and CVAE, the KL divergence term is monitored separately because it indicates whether the latent distribution is being regularized toward the prior $p(\mathbf{z})=\mathcal{N}(\mathbf{0},\mathbf{I})$. For the AE, no KL term is used because the latent representation is deterministic and not explicitly regularized for sampling.
+
+\subsection{Evaluation Protocol}
+\label{subsec:evaluation_protocol}
+
+The models are evaluated from four perspectives: reconstruction quality, classification quality, generation quality, and dominance validity. These evaluations are connected but not equivalent. A model may reconstruct objective vectors well but still generate samples that fail the dominance checks. Therefore, each part of the evaluation protocol measures a different aspect of the Gen-MOR task.
+
+Reconstruction quality measures how accurately the model reproduces input objective vectors. For an input vector $\mathbf{x}_i$ and reconstruction $\hat{\mathbf{x}}_i$, reconstruction error is measured using mean squared error:
+\begin{equation}
+    \operatorname{MSE}
+    =
+    \frac{1}{N_{test}}
+    \sum_{i=1}^{N_{test}}
+    \left\|
+        \mathbf{x}_i - \hat{\mathbf{x}}_i
+    \right\|_2^2.
+    \label{eq:experimental_mse}
+\end{equation}
+Lower MSE indicates better reconstruction of objective-vector plans.
+
+Classification quality measures whether the learned latent representation can distinguish $P^{+}$ from $P^{-}$. The classifier output $\hat{y}_i$ is thresholded to produce a predicted class label:
+\begin{equation}
+    \bar{y}_i =
+    \begin{cases}
+        1, & \text{if } \hat{y}_i \geq 0.5,\\
+        0, & \text{otherwise}.
+    \end{cases}
+    \label{eq:classification_threshold}
+\end{equation}
+The predicted labels are compared with the true labels using accuracy, precision, recall, and weighted F1 score.
+
+Generation quality is evaluated by sampling new latent vectors and decoding them into synthetic objective vectors. For VAE, samples are generated using Eq.~\eqref{eq:vae_generation}. For CVAE, class-specific samples are generated using Eq.~\eqref{eq:cvae_positive_generation} and Eq.~\eqref{eq:cvae_negative_generation}. For DVR evaluation, generated samples are evaluated using a cap of
+\begin{equation}
+    M_{gen} = 500.
+    \label{eq:num_generated_samples}
+\end{equation}
+
+Dominance validity is evaluated using the DVR metrics defined in Section~\ref{subsec:dvr}. Generated $P^{+}$ samples are checked using Eq.~\eqref{eq:positive_dvr}, and generated $P^{-}$ samples are checked using Eq.~\eqref{eq:negative_dvr}. In the current implementation, DVR is computed using chunked vectorized verification with a reference pool of $10{,}000$ real plans and a chunk size of $5{,}000$. This step is the most important structural evaluation because it directly tests whether the generated samples preserve the MORNP-style dominance requirements.
+
+\subsection{Multi-Seed Experimental Design}
+\label{subsec:multi_seed_design}
+
+Neural generative models can be sensitive to random initialization, mini-batch ordering, latent sampling, and train-validation-test splitting. To measure whether the results are stable, the experiment is repeated across multiple random seeds. Let
+\begin{equation}
+    \mathcal{R} = \{r_1, r_2, \ldots, r_L\}
+    \label{eq:random_seed_set}
+\end{equation}
+denote the set of random seeds, where $L$ is the number of independent runs. In the current experiment,
+\begin{equation}
+    L = 5,
+    \qquad
+    \mathcal{R} = \{42,123,456,789,2024\}.
+    \label{eq:seed_count_and_list}
+\end{equation}
+
+The main reported run uses the original 50K dataset with seed $42$; the additional robustness runs use the same pipeline on generated instances for seeds $123$, $456$, $789$, and $2024$. For each model and each seed, the training and evaluation pipeline is repeated. Suppose $a_r$ denotes the value of a metric for seed $r$. The mean metric value is reported as
+\begin{equation}
+    \bar{a}
+    =
+    \frac{1}{L}
+    \sum_{r \in \mathcal{R}} a_r,
+    \label{eq:metric_mean}
+\end{equation}
+and the standard deviation is reported as
+\begin{equation}
+    \sigma_a
+    =
+    \sqrt{
+        \frac{1}{L-1}
+        \sum_{r \in \mathcal{R}}
+        (a_r-\bar{a})^2
+    }.
+    \label{eq:metric_std}
+\end{equation}
+
+Reporting both mean and standard deviation is important because a high average score alone may hide instability. For Gen-MOR, this is especially relevant for DVR. If a model achieves good dominance validity for one seed but poor dominance validity for another seed, then the model has not yet learned a stable dominance-preserving generation process. Therefore, multi-seed evaluation is used to assess robustness, not only average performance.
+
+\subsection{Hardware and Runtime Measurement}
+\label{subsec:hardware_runtime}
+
+Runtime is recorded or monitored for the major stages of the experiment: dataset loading, preprocessing, model training, sample generation, and dominance verification. This is important because the dataset contains $50{,}000$ plan vectors and the dominance verification procedure may become computationally expensive when many generated samples must be compared against a reference pool.
+
+The runtime for a stage is measured as
+\begin{equation}
+    T_{\text{stage}}
+    =
+    t_{\text{end}} - t_{\text{start}},
+    \label{eq:runtime_stage}
+\end{equation}
+where $t_{\text{start}}$ and $t_{\text{end}}$ are wall-clock timestamps recorded before and after the stage.
+
+Table~\ref{tab:runtime_measurements} summarizes runtime-related information reported or monitored in the Colab pipeline.
+
+\begin{table}[H]
+\centering
+\caption{Runtime and scalability-related measurements for the Gen-MOR experimental pipeline.}
+\label{tab:runtime_measurements}
+\begin{tabularx}{\textwidth}{lX}
+\hline
+\textbf{Pipeline Stage} & \textbf{Recorded Information} \\
+\hline
+Dataset construction & $50{,}000$ plans constructed in $6.65$ seconds \\
+Dataset loading & JSON dataset loaded from Google Drive \\
+Preprocessing and normalization & Stratified split and MinMax scaling fitted on training set \\
+AE training & Early stopped after $28$ epochs \\
+VAE training & Early stopped after $22$ epochs \\
+CVAE training & Early stopped after $22$ epochs \\
+DVR computation & Chunked vectorized verification, reference pool $10{,}000$, sample cap $500$ \\
+Runtime hardware & Tesla T4 GPU, 15.6 GB memory \\
+\hline
+\end{tabularx}
+\end{table}
+
+In addition to runtime, the hardware configuration is recorded because training time and dominance verification time depend on the available GPU, RAM, and Colab runtime type. These measurements help interpret the scalability of Gen-MOR and provide practical information for reproducing the experiment.

@@ -1,0 +1,309 @@
+\section{Problem Formulation}
+\label{sec:problem_formulation}
+
+This section formalizes the multi-objective reasoning problem used in Gen-MOR. The formulation begins with plans represented as objective vectors, then defines dominance, nondominance, and dominated plan sets. These definitions are then used to state the MORNP objective-subset problem and the Gen-MOR learning problem. Throughout this paper, we use a maximization convention: a larger objective value is considered better. If an objective is naturally a cost, such as distance or risk, it can be transformed into a maximization score before applying the same definitions.
+
+\subsection{Multi-Objective Plan Representation}
+\label{subsec:plan_representation}
+
+Let
+\begin{equation}
+    \mathcal{P} = \{p_1, p_2, \ldots, p_N\}
+    \label{eq:plan_set}
+\end{equation}
+denote a finite set of $N$ candidate plans. Each plan is evaluated using a collection of $m$ objectives,
+\begin{equation}
+    \Omega = \{\omega_1, \omega_2, \ldots, \omega_m\},
+    \label{eq:objective_set}
+\end{equation}
+where each objective measures one aspect of plan quality. For example, an objective may correspond to time efficiency, energy efficiency, safety, reward, or another planning criterion.
+
+Each plan $p_i$ is represented by an objective vector
+\begin{equation}
+    \mathbf{x}_i = (o_{i1}, o_{i2}, \ldots, o_{im}) \in \mathbb{R}^{m},
+    \label{eq:plan_vector}
+\end{equation}
+where $o_{ij}$ is the value of plan $p_i$ under objective $\omega_j$. The vector $\mathbf{x}_i$ is therefore the numerical representation of plan $p_i$ used by both the dominance-checking procedure and the generative models.
+
+In later sections, we use $p_i$ to refer to the symbolic plan and $\mathbf{x}_i$ to refer to its objective-vector representation. When the context is clear, dominance comparisons are expressed using the plan notation $p_i$, while neural models operate directly on the vector notation $\mathbf{x}_i$.
+
+\subsection{Objective Space}
+\label{subsec:objective_space}
+
+The objective vectors for all plans can be collected into an objective matrix
+\begin{equation}
+    \mathbf{X}
+    =
+    \begin{bmatrix}
+        o_{11} & o_{12} & \cdots & o_{1m} \\
+        o_{21} & o_{22} & \cdots & o_{2m} \\
+        \vdots & \vdots & \ddots & \vdots \\
+        o_{N1} & o_{N2} & \cdots & o_{Nm}
+    \end{bmatrix}
+    \in \mathbb{R}^{N \times m}.
+    \label{eq:objective_matrix}
+\end{equation}
+Each row of $\mathbf{X}$ corresponds to one plan, and each column corresponds to one objective. The full objective space is therefore the $m$-dimensional space in which each plan is represented as a point.
+
+In the MORNP setting, dominance may be evaluated using only a subset of objectives. Let
+\begin{equation}
+    S \subseteq \Omega
+    \label{eq:selected_objective_subset}
+\end{equation}
+denote a selected objective subset. If $S$ contains $k$ objectives, then $|S|=k$. The projection of a plan vector $\mathbf{x}_i$ onto the selected objectives is denoted by
+\begin{equation}
+    \mathbf{x}_i^{S} = (o_{ij})_{\omega_j \in S}.
+    \label{eq:selected_projection}
+\end{equation}
+This projected vector contains only the objective values used for dominance comparison under $S$.
+
+\subsection{Pareto Dominance Relation}
+\label{subsec:pareto_dominance}
+
+Given a selected objective subset $S \subseteq \Omega$, plan $p_a$ Pareto dominates plan $p_b$ under $S$ if $p_a$ is at least as good as $p_b$ on every selected objective and strictly better on at least one selected objective. Under the maximization convention, this dominance relation is defined as
+\begin{equation}
+    p_a \succ_S p_b
+    \iff
+    \left(
+    \forall \omega_j \in S,\; o_{aj} \geq o_{bj}
+    \right)
+    \land
+    \left(
+    \exists \omega_k \in S,\; o_{ak} > o_{bk}
+    \right).
+    \label{eq:pareto_dominance}
+\end{equation}
+Here, $\succ_S$ denotes strict Pareto dominance with respect to the selected objective subset $S$.
+
+This definition is central to the rest of the paper. A plan's dominance status is not determined by its objective vector alone; it is determined by comparing that vector against other plan vectors. Therefore, dominance is a relational property over a set of plans.
+
+\subsection{Nondominated Plan Set $P^{+}$}
+\label{subsec:nondominated_plan_set}
+
+A plan is nondominated under $S$ if there is no plan in the reference plan set that dominates it. Using the dominance relation from Eq.~\eqref{eq:pareto_dominance}, the nondominated plan set is defined as
+\begin{equation}
+    P^{+}_{S}
+    =
+    \left\{
+    p_i \in \mathcal{P}
+    \;\middle|\;
+    \nexists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i
+    \right\}.
+    \label{eq:p_plus_definition}
+\end{equation}
+The set $P^{+}_{S}$ contains the plans that remain relevant under the selected objectives because no other plan is strictly better according to the Pareto dominance relation.
+
+In this paper, $P^{+}$ is used to denote the target nondominated class produced by the MORNP-style data construction. When the selected objective subset is clear from context, we write $P^{+}$ instead of $P^{+}_{S}$.
+
+\subsection{Dominated Plan Set $P^{-}$}
+\label{subsec:dominated_plan_set}
+
+A plan is dominated under $S$ if at least one other plan dominates it. The dominated plan set is therefore defined as
+\begin{equation}
+    P^{-}_{S}
+    =
+    \left\{
+    p_i \in \mathcal{P}
+    \;\middle|\;
+    \exists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i
+    \right\}.
+    \label{eq:p_minus_definition}
+\end{equation}
+The set $P^{-}_{S}$ contains plans that are excluded by the dominance relation because another plan is at least as good on all selected objectives and strictly better on at least one selected objective.
+
+As with $P^{+}$, we write $P^{-}$ when the selected objective subset is clear. In the Gen-MOR dataset, $P^{+}$ and $P^{-}$ are used as the two structural classes for learning. A plan in $P^{+}$ receives the positive label, while a plan in $P^{-}$ receives the negative label.
+
+\subsection{MORNP Problem Definition}
+\label{subsec:mornp_definition}
+
+\begin{problem}[MORNP Problem]
+    The Minimal Objectives Relevant to Nondominated Plans problem, abbreviated as MORNP, asks whether a small subset of objectives can preserve a desired dominance structure among plans. The motivation is that not every objective may be necessary to explain why some plans are nondominated and others are dominated. Therefore, MORNP seeks a compact objective subset that maintains the classification of plans into $P^{+}$ and $P^{-}$.
+\end{problem}
+\textcolor{red}{Make this definition formal. Indicate what are the inputs and the output of the problem.}
+
+
+
+Let $P^{+}_{\text{tar}}$ denote the target set of plans that should remain nondominated, and let $P^{-}_{\text{tar}}$ denote the target set of plans that should remain dominated. A selected objective subset $S \subseteq \Omega$ is considered feasible if it satisfies both conditions:
+\begin{equation}
+    \forall p_i \in P^{+}_{\text{tar}},
+    \quad
+    \nexists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i,
+    \label{eq:mornp_positive_condition}
+\end{equation}
+and
+\begin{equation}
+    \forall p_i \in P^{-}_{\text{tar}},
+    \quad
+    \exists p_j \in \mathcal{P}
+    \text{ such that }
+    p_j \succ_S p_i.
+    \label{eq:mornp_negative_condition}
+\end{equation}
+Eq.~\eqref{eq:mornp_positive_condition} ensures that every target positive plan remains nondominated under the selected objectives. Eq.~\eqref{eq:mornp_negative_condition} ensures that every target negative plan remains dominated under the selected objectives.
+
+The optimization version of MORNP can then be written as
+\begin{equation}
+    S^{*}
+    =
+    \arg\min_{S \subseteq \Omega}
+    |S|
+    \quad
+    \text{subject to}
+    \quad
+    S \text{ satisfies Eq.~\eqref{eq:mornp_positive_condition} and Eq.~\eqref{eq:mornp_negative_condition}}.
+    \label{eq:mornp_optimization}
+\end{equation}
+The decision version asks whether there exists a feasible subset $S$ such that
+\begin{equation}
+    |S| \leq k,
+    \label{eq:mornp_decision}
+\end{equation}
+where $k$ is a given objective budget.
+
+This formulation provides the structural basis for Gen-MOR. The generated data consists of objective vectors whose labels are meaningful only because they satisfy the dominance and nondominance conditions induced by a selected objective subset.
+
+\subsection{Gen-MOR Learning Problem}
+\label{subsec:genmor_learning_problem}
+
+Gen-MOR transforms the MORNP-style dominance structure into a generative learning problem. Given the objective matrix $\mathbf{X}$ from Eq.~\eqref{eq:objective_matrix}, each plan vector $\mathbf{x}_i$ is assigned a binary label
+\begin{equation}
+    y_i =
+    \begin{cases}
+        1, & \text{if } p_i \in P^{+},\\
+        0, & \text{if } p_i \in P^{-}.
+    \end{cases}
+    \label{eq:label_definition}
+\end{equation}
+The resulting supervised generative dataset is
+\begin{equation}
+    \mathcal{D}
+    =
+    \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}.
+    \label{eq:genmor_dataset}
+\end{equation}
+
+The objective of Gen-MOR is to learn a model that captures both the numerical structure of objective vectors and the dominance-based class structure. More specifically, the learned model should support four tasks:
+\begin{compactenum}
+    \item reconstructing input objective vectors,
+    \item classifying objective vectors as $P^{+}$ or $P^{-}$,
+    \item generating new synthetic objective vectors, and
+    \item preserving dominance validity in generated samples.
+\end{compactenum}
+
+Let $G_{\theta}$ denote a generative model with parameters $\theta$. Depending on the model architecture, $G_{\theta}$ may generate a new vector from a latent variable $\mathbf{z}$, or from both a latent variable and a class label. For unconditional generation, the model can be written as
+\begin{equation}
+    \tilde{\mathbf{x}} = G_{\theta}(\mathbf{z}),
+    \quad
+    \mathbf{z} \sim p(\mathbf{z}),
+    \label{eq:unconditional_generation}
+\end{equation}
+where $\tilde{\mathbf{x}}$ is a generated objective vector. For class-conditioned generation, as in a CVAE, generation can be written as
+\begin{equation}
+    \tilde{\mathbf{x}} = G_{\theta}(\mathbf{z}, y),
+    \quad
+    \mathbf{z} \sim p(\mathbf{z}),
+    \quad
+    y \in \{0,1\}.
+    \label{eq:conditional_generation}
+\end{equation}
+The conditional form is especially useful in Gen-MOR because it allows the model to generate samples intended to belong to $P^{+}$ or $P^{-}$.
+
+A generated vector $\tilde{\mathbf{x}}$ is not considered successful merely because it is numerically plausible. It must also satisfy the dominance condition associated with its intended label. This requirement motivates the Dominance Validity Rate metric defined next.
+
+\subsection{Dominance Validity Rate, DVR}
+\label{subsec:dvr}
+
+Dominance Validity Rate (DVR) measures whether generated samples preserve the dominance structure expected from their intended class. Let
+\begin{equation}
+    \tilde{\mathcal{P}}^{+}
+    =
+    \{\tilde{p}^{+}_1, \tilde{p}^{+}_2, \ldots, \tilde{p}^{+}_{M_{+}}\}
+    \label{eq:generated_positive_set}
+\end{equation}
+denote generated samples intended to belong to $P^{+}$, and let
+\begin{equation}
+    \tilde{\mathcal{P}}^{-}
+    =
+    \{\tilde{p}^{-}_1, \tilde{p}^{-}_2, \ldots, \tilde{p}^{-}_{M_{-}}\}
+    \label{eq:generated_negative_set}
+\end{equation}
+denote generated samples intended to belong to $P^{-}$. Each generated plan $\tilde{p}$ has an objective-vector representation $\tilde{\mathbf{x}}$.
+
+For dominance verification, let
+\begin{equation}
+    \mathcal{V}
+    =
+    \mathcal{P}
+    \cup
+    \tilde{\mathcal{P}}^{+}
+    \cup
+    \tilde{\mathcal{P}}^{-}
+    \label{eq:verification_pool}
+\end{equation}
+denote the verification pool containing the original reference plans and the generated plans. The same selected objective subset $S$ is used for all dominance checks.
+
+\subsubsection{Positive Dominance Validity Rate}
+\label{subsubsec:positive_dvr}
+
+A generated positive sample is valid if it remains nondominated under the selected objective subset. The positive DVR is defined as
+\begin{equation}
+    \operatorname{DVR}^{+}
+    =
+    \frac{1}{M_{+}}
+    \sum_{i=1}^{M_{+}}
+    \mathbb{I}
+    \left[
+    \nexists q \in \mathcal{V}
+    \text{ such that }
+    q \succ_S \tilde{p}^{+}_i
+    \right],
+    \label{eq:positive_dvr}
+\end{equation}
+where $\mathbb{I}[\cdot]$ is the indicator function, returning $1$ if the condition is true and $0$ otherwise. A higher $\operatorname{DVR}^{+}$ means that more generated $P^{+}$ samples remain nondominated.
+
+\subsubsection{Negative Dominance Validity Rate}
+\label{subsubsec:negative_dvr}
+
+A generated negative sample is valid if it is dominated by at least one other plan under the selected objective subset. The negative DVR is defined as
+\begin{equation}
+    \operatorname{DVR}^{-}
+    =
+    \frac{1}{M_{-}}
+    \sum_{i=1}^{M_{-}}
+    \mathbb{I}
+    \left[
+    \exists q \in \mathcal{V}
+    \text{ such that }
+    q \succ_S \tilde{p}^{-}_i
+    \right].
+    \label{eq:negative_dvr}
+\end{equation}
+A higher $\operatorname{DVR}^{-}$ means that more generated $P^{-}$ samples correctly remain dominated.
+
+The overall DVR can be reported as a weighted average of positive and negative validity:
+\begin{equation}
+    \operatorname{DVR}
+    =
+    \frac{
+        M_{+}\operatorname{DVR}^{+}
+        +
+        M_{-}\operatorname{DVR}^{-}
+    }{
+        M_{+}+M_{-}
+    }.
+    \label{eq:overall_dvr}
+\end{equation}
+When class-specific behavior is important, $\operatorname{DVR}^{+}$ and $\operatorname{DVR}^{-}$ are reported separately.
+
+\subsubsection{Why DVR Is Needed?}
+\label{subsubsec:why_dvr_needed}
+
+Standard machine learning metrics are necessary but not sufficient for Gen-MOR. Reconstruction mean squared error measures whether a model can reproduce objective vectors. Classification accuracy and F1 score measure whether a model can separate $P^{+}$ and $P^{-}$ labels on observed data. However, none of these metrics directly checks whether newly generated samples satisfy the dominance relation in Eq.~\eqref{eq:pareto_dominance}.
+
+This distinction is important because dominance validity is relational. A generated vector may have low reconstruction error or may be classified as $P^{+}$ by a neural classifier, but it may still be dominated by another plan when checked using the formal Pareto relation. Similarly, a generated $P^{-}$ sample may appear numerically plausible but fail to be dominated by any other plan. DVR is therefore introduced as a structural validity metric that directly evaluates whether generated samples preserve the MORNP-style dominance requirements.
