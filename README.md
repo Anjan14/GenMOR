@@ -1,3 +1,3 @@
 # GenMOR
-## This is a Work in Progress project
+## Currently auditing this work for a version 2 project
 Other contributor: Syed Hasnayeen
